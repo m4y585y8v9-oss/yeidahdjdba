@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>???</title>
+    <style>
+        :root {
+            --bg-color: #07080a;
+            --accent-cyan: #00f0ff;
+            --accent-green: #00ff66;
+            --accent-red: #ff3366;
+            --panel-bg: rgba(15, 18, 25, 0.85);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: #ffffff;
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* CRT Scanline Background Overlay */
+        body::before {
+            content: " ";
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 10;
+            background-size: 100% 3px, 6px 100%;
+            pointer-events: none;
+        }
+
+        .ambient-glow {
+            position: absolute;
+            width: 320px;
+            height: 320px;
+            background: radial-gradient(circle, rgba(0,240,255,0.08) 0%, rgba(0,0,0,0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            padding: 15px;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        .screen.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* ================= SCREEN 1: 5 CUBES ================= */
+        .cube-container {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .cube-input {
+            width: 52px;
+            height: 62px;
+            background: var(--panel-bg);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            color: var(--accent-cyan);
+            font-size: 26px;
+            font-weight: bold;
+            text-align: center;
+            text-transform: uppercase;
+            outline: none;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            transition: all 0.2s ease;
+            caret-color: transparent;
+        }
+
+        .cube-input:focus {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+            transform: scale(1.05);
+        }
+
+        .cube-input.error {
+            border-color: var(--accent-red);
+            box-shadow: 0 0 20px rgba(255, 51, 102, 0.6);
+            animation: shake 0.4s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px); }
+            40% { transform: translateX(8px); }
+            60% { transform: translateX(-5px); }
+            80% { transform: translateX(5px); }
+        }
+
+        /* ================= SCREEN 2: ECU CODE EDITOR ================= */
+        .terminal-window {
+            background: rgba(10, 14, 20, 0.95);
+            border: 1px solid var(--accent-cyan);
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.2);
+            border-radius: 10px;
+            width: 100%;
+            max-width: 480px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .terminal-header {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 15px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        .dot.red { background: #ff5f56; }
+        .dot.yellow { background: #ffbd2e; }
+        .dot.green { background: #27c93f; }
+
+        .terminal-title {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-left: 10px;
+            letter-spacing: 1px;
+        }
+
+        .code-container {
+            padding: 15px;
+            font-size: 12px;
+            line-height: 1.55;
+            color: #d4d4d4;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .code-line {
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin-bottom: 2px;
+        }
+
+        .indent { padding-left: 14px; }
+        .indent-2 { padding-left: 28px; }
+
+        .c-keyword { color: #569cd6; font-weight: bold; }
+        .c-func { color: #dcdcaa; }
+        .c-comment { color: #6a9955; font-style: italic; }
+        .c-num { color: #b5cea8; }
+        .c-str { color: #ce9178; }
+        .c-auto { color: #ce9178; font-weight: bold; }
+        .c-it { color: #4ec9b0; font-weight: bold; }
+
+        .code-input {
+            width: 44px;
+            height: 24px;
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid var(--accent-cyan);
+            border-radius: 4px;
+            color: var(--accent-green);
+            font-weight: bold;
+            font-size: 13px;
+            text-align: center;
+            outline: none;
+            font-family: inherit;
+            text-transform: uppercase;
+        }
+
+        .code-input:focus {
+            border-color: var(--accent-green);
+            background: rgba(0, 255, 102, 0.15);
+            box-shadow: 0 0 8px rgba(0, 255, 102, 0.4);
+        }
+
+        .run-btn {
+            width: calc(100% - 24px);
+            margin: 10px 12px 10px 12px;
+            padding: 12px;
+            background: linear-gradient(135deg, rgba(0,240,255,0.2), rgba(0,255,102,0.2));
+            border: 1px solid var(--accent-cyan);
+            color: #ffffff;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 12px;
+            letter-spacing: 1px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .run-btn:active {
+            transform: scale(0.98);
+            background: var(--accent-cyan);
+            color: #000;
+        }
+
+        .console-output {
+            background: #000;
+            padding: 10px 12px;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.7);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            min-height: 38px;
+            flex-shrink: 0;
+        }
+
+        .console-output.error { color: var(--accent-red); }
+        .console-output.success { color: var(--accent-green); }
+
+        /* ================= SCREEN 3: COORDINATES ================= */
+        .coord-box {
+            background: var(--panel-bg);
+            border: 1px solid var(--accent-green);
+            box-shadow: 0 0 35px rgba(0, 255, 102, 0.2);
+            padding: 30px 25px;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 90%;
+            width: 360px;
+            animation: pulseGlow 3s infinite alternate;
+        }
+
+        .coord-title {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+
+        .coord-value {
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--accent-green);
+            letter-spacing: 1.5px;
+            text-shadow: 0 0 10px rgba(0, 255, 102, 0.5);
+            word-break: break-all;
+        }
+
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 20px rgba(0, 255, 102, 0.2); }
+            100% { box-shadow: 0 0 40px rgba(0, 255, 102, 0.4); }
+        }
+
+        @media (max-width: 380px) {
+            .cube-input {
+                width: 44px;
+                height: 54px;
+                font-size: 22px;
+            }
+            .code-container {
+                font-size: 11px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ambient-glow"></div>
+
+    <!-- SCREEN 1: 5 PASSCODE CUBES -->
+    <div id="screen-1" class="screen active">
+        <div class="cube-container">
+            <input type="text" class="cube-input" maxlength="1" autocomplete="off" autocapitalize="characters" autofocus>
+            <input type="text" class="cube-input" maxlength="1" autocomplete="off" autocapitalize="characters">
+            <input type="text" class="cube-input" maxlength="1" autocomplete="off" autocapitalize="characters">
+            <input type="text" class="cube-input" maxlength="1" autocomplete="off" autocapitalize="characters">
+            <input type="text" class="cube-input" maxlength="1" autocomplete="off" autocapitalize="characters">
+        </div>
+    </div>
+
+    <!-- SCREEN 2: ECU CODE EDITOR PUZZLE -->
+    <div id="screen-2" class="screen">
+        <div class="terminal-window">
+            <div class="terminal-header">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+                <span class="terminal-title">ECU_DIAGNOSTIC.js — CO-OP IDE</span>
+            </div>
+            
+            <div class="code-container">
+                <div class="code-line"><span class="c-keyword">function</span> <span class="c-func">calibrateECU</span>() {</div>
+                
+                <!-- TASK 1 -->
+                <div class="code-line indent"><span class="c-comment">// 1. <span class="c-auto">[Task 1]</span> Передаточное число главной пары: ведомая шестерня 60 зубьев, ведущая 15 зубьев.</span></div>
+                <div class="code-line indent"><span class="c-comment">//    <span class="c-it">[Task 2]</span> Чему равен результат битового сдвига (1 &lt;&lt; i)?</span></div>
+                <div class="code-line indent"><span class="c-keyword">const</span> can_port = <input type="text" id="code-1" class="code-input" maxlength="2" autocomplete="off">;</div>
+                
+                <br>
+                <!-- TASK 2 -->
+                <div class="code-line indent"><span class="c-comment">// 2. <span class="c-auto">[Task 1]</span> Идеальное AFR смесь/бензин (округлить до целого).</span></div>
+                <div class="code-line indent"><span class="c-comment">//    <span class="c-it">[Task 1]</span> В массиве [8, 12, 15, 22, 30] найди ИНДЕКС этого числа.</span></div>
+                <div class="code-line indent"><span class="c-keyword">const</span> afr_idx = <input type="text" id="code-2" class="code-input" maxlength="1" autocomplete="off">;</div>
+                
+                <br>
+                <!-- TASK 3 -->
+                <div class="code-line indent"><span class="c-comment">// 3. <span class="c-auto">[Task 1]</span> Сколько всего импульсов даст диск 60-2 за 3 оборота?</span></div>
+                <div class="code-line indent"><span class="c-comment">//    <span class="c-it">[Task 2]</span> Запиши полученный результат в HEX (16-ричном виде).</span></div>
+                <div class="code-line indent"><span class="c-keyword">const</span> hex_pulses = <span class="c-str">"</span><input type="text" id="code-3" class="code-input" maxlength="2" autocomplete="off"><span class="c-str">"</span>;</div>
+                
+                <br>
+                <div class="code-line indent"><span class="c-keyword">if</span> (await validateEcuParameters(can_port, afr_idx, hex_pulses))  {</div>
+                <div class="code-line indent-2"><span class="c-func">syncSatelliteCoords</span>();</div>
+                <div class="code-line indent">} <span class="c-keyword">else</span> {</div>
+                <div class="code-line indent-2"><span class="c-keyword">throw</span> <span class="c-str">"ERR_ECU_SYNC_FAILED"</span>;</div>
+                <div class="code-line indent">}</div>
+                <div class="code-line">}</div>
+            </div>
+
+            <button class="run-btn" id="run-btn">▶ ИСПОЛНИТЬ КОД ЭБУ</button>
+            <div class="console-output" id="console-output">> Ожидание ввода параметров ЭБУ...</div>
+        </div>
+    </div>
+
+    <!-- SCREEN 3: FINAL COORDINATES -->
+    <div id="screen-3" class="screen">
+        <div class="coord-box">
+            <div class="coord-title">[ ЦЕЛЬ НАЙДЕНА ]</div>
+            <div class="coord-value" id="coord-text">52.495668, 80.204741</div>
+        </div>
+    </div>
+
+    <script>
+        // ================= CONFIGURATION =================
+        const CORRECT_PASSCODE = "ROD26"; 
+        const FINAL_COORDINATES = "52.495668, 80.204741"; 
+        // =================================================
+
+        // Audio Synthesizer
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(freq, type = 'sine', duration = 0.1) {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            } catch(e) {}
+        }
+
+        // --- SCREEN 1 LOGIC ---
+        const inputs = document.querySelectorAll('.cube-input');
+        
+        inputs.forEach((input, index) => {
+            input.addEventListener('input', (e) => {
+                playSound(400 + index * 50, 'sine', 0.08);
+                const value = e.target.value.toUpperCase();
+                e.target.value = value;
+
+                if (value && index < inputs.length - 1) {
+                    inputs[index + 1].focus();
+                }
+
+                checkPasscode();
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Backspace' && !input.value && index > 0) {
+                    inputs[index - 1].focus();
+                }
+            });
+        });
+
+        function checkPasscode() {
+            let entered = "";
+            inputs.forEach(i => entered += i.value);
+
+            if (entered.length === 5) {
+                if (entered === CORRECT_PASSCODE) {
+                    playSound(800, 'triangle', 0.2);
+                    setTimeout(() => switchScreen('screen-1', 'screen-2'), 300);
+                } else {
+                    playSound(150, 'sawtooth', 0.3);
+                    inputs.forEach(i => i.classList.add('error'));
+                    setTimeout(() => {
+                        inputs.forEach(i => {
+                            i.classList.remove('error');
+                            i.value = '';
+                        });
+                        inputs[0].focus();
+                    }, 600);
+                }
+            }
+        }
+
+        function switchScreen(fromId, toId) {
+            const from = document.getElementById(fromId);
+            const to = document.getElementById(toId);
+            from.classList.remove('active');
+            setTimeout(() => {
+                to.classList.add('active');
+                if (toId === 'screen-2') initEcuPuzzle();
+            }, 500);
+        }
+
+        // --- SCREEN 2: ECU CODE PUZZLE LOGIC ---
+        function initEcuPuzzle() {
+            const runBtn = document.getElementById('run-btn');
+            const consoleOut = document.getElementById('console-output');
+            const in1 = document.getElementById('code-1');
+            const in2 = document.getElementById('code-2');
+            const in3 = document.getElementById('code-3');
+
+            // Focus & auto-advance for code inputs
+            const codeInputs = [in1, in2, in3];
+            codeInputs.forEach((inp, idx) => {
+                inp.addEventListener('input', () => {
+                    playSound(500 + idx * 100, 'sine', 0.05);
+                    if (inp.value.length >= inp.maxLength && idx < codeInputs.length - 1) {
+                        codeInputs[idx + 1].focus();
+                    }
+                });
+            });
+
+            runBtn.addEventListener('click', () => {
+                playSound(300, 'square', 0.1);
+                
+                const val1 = in1.value.trim();
+                const val2 = in2.value.trim();
+                const val3 = in3.value.trim().toUpperCase();
+
+                // Validation logic for Task 1 (16), Task 2 (2), Task 3 (AE)
+                if (val1 === "16" && val2 === "2" && val3 === "AE") {
+                    // Success!
+                    consoleOut.className = "console-output success";
+                    consoleOut.innerText = "> [OK] ЭБУ СИНХРОНИЗИРОВАН. Получение координат...";
+                    playSound(600, 'triangle', 0.15);
+                    setTimeout(() => playSound(900, 'sine', 0.4), 200);
+
+                    document.getElementById('coord-text').innerText = FINAL_COORDINATES;
+                    setTimeout(() => switchScreen('screen-2', 'screen-3'), 1200);
+                } else {
+                    // Error Output
+                    consoleOut.className = "console-output error";
+                    consoleOut.innerText = "> [ERR_ECU_SYNC_FAILED]: Ошибка расчетов! Проверьте данные.";
+                    playSound(150, 'sawtooth', 0.3);
+                    
+                    const windowEl = document.querySelector('.terminal-window');
+                    windowEl.style.animation = "shake 0.4s ease-in-out";
+                    setTimeout(() => windowEl.style.animation = "", 400);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
